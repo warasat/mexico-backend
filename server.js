@@ -3,36 +3,15 @@ const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const cors = require("cors");
 
-// Load env vars
 dotenv.config();
-
-// Connect to MongoDB
 connectDB();
 
 const app = express();
 
-// ✅ CORS middleware (place before routes)
-app.use(
-  cors({
-    origin: [
-      "https://doctor-appointment-system-frontend-brown.vercel.app", // frontend vercel domain
-      "http://localhost:5173", // local dev
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "Origin",
-      "X-Requested-With",
-      "Content-Type",
-      "Accept",
-      "Authorization",
-    ],
-    credentials: true,
-  })
-);
+// ✅ CORS sabse pehle aur simple
+app.use(cors());  
+app.options("*", cors()); // preflight handle
 
-app.options("*", cors()); // ✅ handle preflight requests
-
-// Body parser middleware
 app.use(express.json());
 
 // Routes
