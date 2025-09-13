@@ -7,7 +7,6 @@ dotenv.config();
 
 // Connect to MongoDB
 connectDB();
-
 const app = express();
 
 // CORS middleware
