@@ -8,10 +8,10 @@ connectDB();
 
 const app = express();
 
-// ✅ CORS sabse pehle aur simple
-app.use(cors());  
-app.options("*", cors()); // preflight handle
+// ✅ Allow all CORS
+app.use(cors());
 
+// ✅ Body parser
 app.use(express.json());
 
 // Routes
