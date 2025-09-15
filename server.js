@@ -2,26 +2,27 @@ const express = require("express");
 const dotenv = require("dotenv");
 const http = require('http');
 const connectDB = require("./config/db");
-const cors = require('cors');
+const cors = require("cors");
 const { Server } = require('socket.io');
 
-// Load env vars
 dotenv.config();
-
-// Connect to MongoDB
 connectDB();
 
 const app = express();
 
 // CORS middleware
-app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173', credentials: true }));
+const allowedOrigins = [
+  process.env.CORS_ORIGIN || 'http://localhost:5173',
+  'http://localhost:5174'
+];
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 
 // Body parser middleware
 app.use(express.json());
 
 // Routes
 app.get("/", (req, res) => {
-    res.send("API is running...");
+  res.send("API is running....");
 });
 
 app.use("/api/users", require("./routes/userRoutes"));      // already existing
@@ -45,7 +46,7 @@ app.use((err, req, res, next) => {
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: allowedOrigins,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   },
 });
