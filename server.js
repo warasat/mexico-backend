@@ -1,6 +1,9 @@
 const express = require("express");
 const dotenv = require("dotenv");
+const http = require('http');
 const connectDB = require("./config/db");
+const cors = require('cors');
+const { Server } = require('socket.io');
 
 // Load env vars
 dotenv.config();
@@ -11,17 +14,7 @@ connectDB();
 const app = express();
 
 // CORS middleware
-app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "http://localhost:5173");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
-
-    if (req.method === "OPTIONS") {
-        res.sendStatus(200);
-    } else {
-        next();
-    }
-});
+app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173', credentials: true }));
 
 // Body parser middleware
 app.use(express.json());
@@ -34,7 +27,33 @@ app.get("/", (req, res) => {
 app.use("/api/users", require("./routes/userRoutes"));      // already existing
 app.use("/api/landing", require("./routes/landingRoutes")); // already existing
 app.use("/api/patients", require("./routes/patientRoutes")); // patient authentication
-app.use("/api/doctors", require("./routes/doctorRoutes")); // doctor authentication
+app.use("/api", require("./routes/doctorProfileRoutes"));    // doctor profile module
+app.use("/api/doctors", require("./routes/doctorRoutes"));   // doctor authentication
+
+// Centralized error handler (handles multer and other errors)
+app.use((err, req, res, next) => {
+  if (err && err.name === 'MulterError') {
+    return res.status(400).json({ message: err.message });
+  }
+  if (err && typeof err.message === 'string') {
+    // Validation or custom errors thrown in middlewares (e.g., file type)
+    return res.status(400).json({ message: err.message });
+  }
+  return res.status(500).json({ message: 'Internal server error' });
+});
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  },
+});
+io.on('connection', (socket) => {
+  socket.emit('connected', { ok: true });
+  socket.on('disconnect', () => {});
+});
+app.set('io', io);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
