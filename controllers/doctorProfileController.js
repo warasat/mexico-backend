@@ -15,7 +15,6 @@ function publicDoctorProjection() {
     'address.city': 1,
     'address.country': 1,
     experience: 1,
-    workExperience: 1,
     knownLanguages: 1,
     servicesOffered: 1,
     insurances: 1,
@@ -27,17 +26,8 @@ function publicDoctorProjection() {
 function toCard(doc) {
   const name = doc.displayName || [doc.firstName, doc.lastName].filter(Boolean).join(' ').trim();
   const location = [doc.address?.city, doc.address?.country].filter(Boolean).join(', ');
-  // Derive a display experience: if provided years <= 1 and no workExperience entries,
-  // promote to 20 to match requested default display across the app.
-  let experienceDisplay = doc.experience || '';
-  try {
-    const match = /([0-9]+)/.exec(String(experienceDisplay));
-    const years = match ? parseInt(match[1], 10) : NaN;
-    const hasWork = Array.isArray(doc.workExperience) && doc.workExperience.length > 0;
-    if ((!years || years <= 1) && !hasWork) {
-      experienceDisplay = '20 years';
-    }
-  } catch {}
+  // Use the experience field as provided
+  const experienceDisplay = doc.experience || '';
 
   return {
     id: String(doc._id),
@@ -148,10 +138,6 @@ exports.updateMe = async (req, res) => {
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
     const payload = { ...req.body };
 
-    if (payload && typeof payload.education === 'string') {
-      const degree = payload.education.trim();
-      payload.education = degree ? [{ degree, institution: '', startYear: undefined, endYear: undefined, description: '' }] : [];
-    }
 
     const errors = {};
     if (payload.email && typeof payload.email !== 'string') errors.email = 'email must be string';

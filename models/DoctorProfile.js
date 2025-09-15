@@ -21,38 +21,6 @@ const AddressSchema = new Schema(
   { _id: false }
 );
 
-const EducationSchema = new Schema(
-  {
-    institution: { type: String, default: '' },
-    degree: { type: String, default: '' },
-    startYear: { type: Number },
-    endYear: { type: Number },
-    description: { type: String, default: '' },
-  },
-  { _id: false }
-);
-
-const WorkExperienceSchema = new Schema(
-  {
-    organization: { type: String, default: '' },
-    position: { type: String, default: '' },
-    startYear: { type: Number },
-    endYear: { type: Number },
-    isCurrent: { type: Boolean, default: false },
-    description: { type: String, default: '' },
-  },
-  { _id: false }
-);
-
-const AwardSchema = new Schema(
-  {
-    title: { type: String, default: '' },
-    year: { type: Number },
-    organization: { type: String, default: '' },
-    description: { type: String, default: '' },
-  },
-  { _id: false }
-);
 
 const DoctorProfileSchema = new Schema(
   {
@@ -72,10 +40,7 @@ const DoctorProfileSchema = new Schema(
     experience: { type: String, default: '' },
     insurances: [{ type: String }],
 
-    education: { type: [EducationSchema], default: [] },
-    workExperience: { type: [WorkExperienceSchema], default: [] },
     servicesOffered: [{ type: String }],
-    awards: { type: [AwardSchema], default: [] },
 
     aboutMe: { type: String, default: '' },
     knownLanguages: [{ type: String }],

@@ -32,7 +32,6 @@ const body = {
   languages: undefined, // frontend should send knownLanguages
   knownLanguages: ['English', 'Spanish'],
   specialtyRank: 3,
-  education: 'MD', // transform supported
 };
 const res = await axios.put('http://localhost:5000/api/doctors/me', body, {
   headers: { Authorization: `Bearer ${token}` }
