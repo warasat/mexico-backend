@@ -2,6 +2,12 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
 const patientSchema = new mongoose.Schema({
+  patientId: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true,
+  },
   fullName: { 
     type: String, 
     required: [true, "Full name is required"],
@@ -43,6 +49,28 @@ patientSchema.pre("save", async function(next) {
     next();
   } catch (error) {
     next(error);
+  }
+});
+
+// Generate patientId if missing (format: PTXXXXXX numeric unique)
+patientSchema.pre("save", async function(next) {
+  if (this.patientId) return next();
+  try {
+    const Model = this.constructor;
+    for (let i = 0; i < 5; i++) {
+      const num = Math.floor(100000 + Math.random() * 900000); // 6-digit
+      const candidate = `PT${num}`;
+      const exists = await Model.findOne({ patientId: candidate }).lean();
+      if (!exists) {
+        this.patientId = candidate;
+        return next();
+      }
+    }
+    // Fallback: derive from _id
+    this.patientId = `PT${String(this._id).slice(-6).toUpperCase()}`;
+    return next();
+  } catch (err) {
+    return next(err);
   }
 });
 

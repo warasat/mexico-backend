@@ -7,7 +7,7 @@ module.exports = function auth(req, res, next) {
       return res.status(401).json({ message: 'Unauthorized: Missing token' });
     }
     const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret_key');
     req.user = decoded; // { id, ... }
     next();
   } catch (err) {
