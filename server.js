@@ -13,7 +13,7 @@ const app = express();
 // CORS middleware
 const allowedOrigins = [
   process.env.CORS_ORIGIN || 'http://localhost:5173',
-  'http://localhost:5174'
+  process.env.CORS_ORIGIN_ALT || 'http://localhost:5174'
 ];
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 
