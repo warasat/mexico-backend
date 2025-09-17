@@ -135,6 +135,7 @@ const loginPatient = async (req, res) => {
       token,
       patient: {
         id: patient._id,
+        patientId: patient.patientId,
         fullName: patient.fullName,
         email: patient.email,
         phone: patient.phone
