@@ -11,11 +11,8 @@ connectDB();
 const app = express();
 
 // CORS middleware
-const allowedOrigins = [
-  process.env.CORS_ORIGIN || 'http://localhost:5173',
-  'http://localhost:5174'
-];
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+// ✅ Allow all CORS
+app.use(cors());
 
 // Body parser middleware
 app.use(express.json());
