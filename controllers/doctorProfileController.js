@@ -111,9 +111,28 @@ exports.getDoctorById = async (req, res) => {
   try {
     const { id } = req.params;
     if (!mongoose.isValidObjectId(id)) return res.status(400).json({ message: 'Invalid doctor id' });
-    const doc = await DoctorProfile.findById(id).lean();
-    if (!doc) return res.status(404).json({ message: 'Doctor not found' });
-    return res.json({ success: true, doctor: doc });
+
+    const profile = await DoctorProfile.findById(id).lean();
+    if (!profile) return res.status(404).json({ message: 'Doctor not found' });
+
+    // Try to enrich with reviews from Landing Doctor if available
+    let reviews = [];
+    try {
+      const LandingDoctorModel = require('../models/Doctor');
+      const Testimonial = require('../models/Testimonial');
+      const landing = await LandingDoctorModel.findOne({ user: profile.user }).lean();
+      if (landing?._id) {
+        reviews = await Testimonial.find({ doctorId: landing._id, isActive: true })
+          .sort({ createdAt: -1 })
+          .limit(50)
+          .select({ patientName: 1, comment: 1, rating: 1, location: 1, imageUrl: 1, createdAt: 1 })
+          .lean();
+      }
+    } catch (_) {
+      // Silently ignore review enrichment errors
+    }
+
+    return res.json({ success: true, doctor: profile, reviews });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to fetch doctor' });
   }
@@ -205,6 +224,57 @@ exports.updateAvailability = async (req, res) => {
     return res.json({ success: true, doctor: doc });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to update availability' });
+  }
+};
+
+// GET /api/doctor/availability/:doctorId
+exports.getAvailabilityByDoctorId = async (req, res) => {
+  try {
+    const { doctorId } = req.params;
+    if (!mongoose.isValidObjectId(doctorId)) return res.status(400).json({ message: 'Invalid doctor id' });
+    let doc = await DoctorProfile.findById(doctorId).select({ weeklyAvailability: 1 }).lean();
+    if (!doc) doc = await DoctorProfile.findOne({ user: doctorId }).select({ weeklyAvailability: 1 }).lean();
+
+    const emptyDay = { morning: [], afternoon: [], evening: [] };
+    const defaultWeek = {
+      monday: { ...emptyDay },
+      tuesday: { ...emptyDay },
+      wednesday: { ...emptyDay },
+      thursday: { ...emptyDay },
+      friday: { ...emptyDay },
+      saturday: { ...emptyDay },
+      sunday: { ...emptyDay },
+    };
+    return res.json({ success: true, weeklyAvailability: doc?.weeklyAvailability || defaultWeek });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to fetch availability' });
+  }
+};
+
+// POST /api/doctor/availability (auth)
+exports.saveAvailabilityForMe = async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    const payload = req.body?.weeklyAvailability || req.body || {};
+    const days = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+    const normalized = {};
+    for (const d of days) {
+      const v = payload[d] || {};
+      normalized[d] = {
+        morning: Array.isArray(v.morning) ? v.morning : [],
+        afternoon: Array.isArray(v.afternoon) ? v.afternoon : [],
+        evening: Array.isArray(v.evening) ? v.evening : [],
+      };
+    }
+    const doc = await DoctorProfile.findOneAndUpdate(
+      { user: userId },
+      { $set: { weeklyAvailability: normalized } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    ).lean();
+    return res.json({ success: true, weeklyAvailability: doc.weeklyAvailability });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to save availability' });
   }
 };
 

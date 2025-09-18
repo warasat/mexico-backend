@@ -22,6 +22,15 @@ const AddressSchema = new Schema(
 );
 
 
+const DaySlotsSchema = new Schema(
+  {
+    morning: [{ type: String }],
+    afternoon: [{ type: String }],
+    evening: [{ type: String }],
+  },
+  { _id: false }
+);
+
 const DoctorProfileSchema = new Schema(
   {
     user: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
@@ -47,8 +56,20 @@ const DoctorProfileSchema = new Schema(
 
     specialtyRank: { type: Number, default: 0 },
 
+    // Simple status for card presence
     availability: { type: String, enum: ['available', 'unavailable'], default: 'unavailable' },
     availabilityUpdatedAt: { type: Date },
+
+    // Weekly availability schedule for booking
+    weeklyAvailability: {
+      monday: { type: DaySlotsSchema, default: () => ({ morning: [], afternoon: [], evening: [] }) },
+      tuesday: { type: DaySlotsSchema, default: () => ({ morning: [], afternoon: [], evening: [] }) },
+      wednesday: { type: DaySlotsSchema, default: () => ({ morning: [], afternoon: [], evening: [] }) },
+      thursday: { type: DaySlotsSchema, default: () => ({ morning: [], afternoon: [], evening: [] }) },
+      friday: { type: DaySlotsSchema, default: () => ({ morning: [], afternoon: [], evening: [] }) },
+      saturday: { type: DaySlotsSchema, default: () => ({ morning: [], afternoon: [], evening: [] }) },
+      sunday: { type: DaySlotsSchema, default: () => ({ morning: [], afternoon: [], evening: [] }) },
+    },
   },
   { timestamps: true }
 );
