@@ -10,8 +10,7 @@ const DoctorAuth = require('../models/DoctorAuth');
 const DoctorProfile = require('../models/DoctorProfile');
 
 const cities = [
-  'Mexico City', 'Guadalajara', 'Monterrey', 'Puebla', 'Cancún', 'Mérida', 'León', 'Querétaro',
-  'Tijuana', 'Oaxaca', 'Toluca', 'San Luis Potosí', 'Chihuahua', 'Morelia', 'Aguascalientes',
+  'Puerto Vallarta', 'Mexico City', 'Playa del Carmen', 'Lake Chapala', 'San Miguel de Allende', 'Guadalajara'
 ];
 
 const specializations = [
@@ -35,7 +34,8 @@ function buildDoctor(i) {
   const password = `Passw0rd!${100 + i}`;
   const qualification = `${rand(qualifications)}, ${rand(qualifications)}`;
   const designation = rand(specializations);
-  const city = rand(cities);
+  // Assign cities in order to ensure each doctor gets a unique city
+  const city = cities[(i - 1) % cities.length];
   const address = `${Math.floor(Math.random() * 900 + 100)} Calle ${lastName}, ${city}`;
   const phone = `+52 ${Math.floor(1000000000 + Math.random() * 900000000)}`;
   const about = `Especialista en ${designation.toLowerCase()} con enfoque en atención humana y resultados.`;
