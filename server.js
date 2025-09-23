@@ -24,8 +24,11 @@ app.get("/", (req, res) => {
 app.use("/api/users", require("./routes/userRoutes"));
 app.use("/api/landing", require("./routes/landingRoutes"));
 app.use("/api/patients", require("./routes/patientRoutes"));
-app.use("/api", require("./routes/doctorProfileRoutes"));
+// Mount appointments BEFORE the broad '/api' doctorProfileRoutes to avoid swallowing
+app.use("/api", require("./routes/appointmentRoutes"));
 app.use("/api/doctors", require("./routes/doctorRoutes"));
+app.use("/api", require("./routes/doctorProfileRoutes"));
+app.use("/api", require("./routes/adminRoutes"));
 
 // Centralized error handler
 app.use((err, req, res, next) => {
@@ -50,6 +53,13 @@ const io = new Server(server, {
 
 io.on("connection", (socket) => {
   socket.emit("connected", { ok: true });
+  // Clients should emit: joinRoom, with one of patient_<id>, doctor_<doctorProfileId>, doctorUser_<authUserId>, admin
+  socket.on('joinRoom', (room) => {
+    if (typeof room === 'string' && room.length <= 64) {
+      socket.join(room);
+      socket.emit('joinedRoom', { room });
+    }
+  });
   socket.on("disconnect", () => {});
 });
 app.set("io", io);
