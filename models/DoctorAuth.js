@@ -2,6 +2,12 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
 const doctorAuthSchema = new mongoose.Schema({
+  doctorId: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true,
+  },
   fullName: { 
     type: String, 
     required: [true, "Full name is required"],
@@ -29,6 +35,28 @@ const doctorAuthSchema = new mongoose.Schema({
   }
 }, {
   timestamps: true
+});
+
+// Generate doctorId if missing (format: DRXXXXXX numeric unique)
+doctorAuthSchema.pre("save", async function(next) {
+  if (this.doctorId) return next();
+  try {
+    const Model = this.constructor;
+    for (let i = 0; i < 5; i++) {
+      const num = Math.floor(100000 + Math.random() * 900000); // 6-digit
+      const candidate = `DR${num}`;
+      const exists = await Model.findOne({ doctorId: candidate }).lean();
+      if (!exists) {
+        this.doctorId = candidate;
+        return next();
+      }
+    }
+    // Fallback: derive from _id
+    this.doctorId = `DR${String(this._id).slice(-6).toUpperCase()}`;
+    return next();
+  } catch (err) {
+    return next(err);
+  }
 });
 
 // Hash password before saving

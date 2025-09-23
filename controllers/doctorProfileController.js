@@ -20,6 +20,7 @@ function publicDoctorProjection() {
     insurances: 1,
     specialtyRank: 1,
     availability: 1,
+    isBlocked: 1, // Include blocking status
   };
 }
 
@@ -89,6 +90,9 @@ exports.listDoctors = async (req, res) => {
     if (q) filter.$text = { $search: q };
     if (city) filter['address.city'] = { $regex: new RegExp(`^${city}$`, 'i') };
     if (specialty) filter.designation = { $regex: new RegExp(specialty, 'i') };
+    
+    // Filter out blocked doctors from public listings
+    filter.isBlocked = { $ne: true };
 
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
     const pageSize = Math.min(Math.max(parseInt(limit, 10) || 12, 1), 100);
@@ -114,6 +118,11 @@ exports.getDoctorById = async (req, res) => {
 
     const profile = await DoctorProfile.findById(id).lean();
     if (!profile) return res.status(404).json({ message: 'Doctor not found' });
+
+    // Check if doctor is blocked
+    if (profile.isBlocked) {
+      return res.status(403).json({ message: 'This doctor is currently unavailable for appointments' });
+    }
 
     // Try to enrich with reviews from Landing Doctor if available
     let reviews = [];

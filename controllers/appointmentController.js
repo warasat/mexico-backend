@@ -84,6 +84,11 @@ async function createAppointment(req, res) {
       return res.status(400).json({ success: false, message: 'Doctor not found' });
     }
 
+    // Check if doctor is blocked
+    if (doctorProfile.isBlocked) {
+      return res.status(403).json({ success: false, message: 'This doctor is currently unavailable for appointments' });
+    }
+
     if (!mongoose.isValidObjectId(patientId)) {
       return res.status(400).json({ success: false, message: 'Invalid patient id' });
     }
@@ -190,10 +195,41 @@ async function getDoctorAppointments(req, res) {
     // Some legacy records may have stored doctorId as the doctor auth user id
     if (mongoose.isValidObjectId(userId)) doctorIds.push(new mongoose.Types.ObjectId(userId));
     const filter = doctorIds.length ? { doctorId: { $in: doctorIds } } : { doctorId: userId };
-    const items = await Appointment.find(filter).sort({ createdAt: -1 }).lean();
-    const list = items.map(shapeAppointmentForFrontend);
+    
+    // Use aggregation to fetch patient profile images
+    const PatientProfile = require('../models/PatientProfile');
+    const items = await Appointment.aggregate([
+      { $match: filter },
+      {
+        $lookup: {
+          from: 'patientprofiles',
+          localField: 'patientId',
+          foreignField: 'user',
+          as: 'patientProfile',
+          pipeline: [
+            { $project: { profileImage: 1, firstName: 1, lastName: 1 } }
+          ]
+        }
+      },
+      { $sort: { createdAt: -1 } }
+    ]);
+    
+    const list = items.map(item => {
+      const patientProfile = item.patientProfile && item.patientProfile[0] ? item.patientProfile[0] : null;
+      const patientImage = patientProfile?.profileImage?.url || '';
+      
+      return {
+        ...shapeAppointmentForFrontend(item),
+        patient: {
+          ...shapeAppointmentForFrontend(item).patient,
+          profileImage: patientImage
+        }
+      };
+    });
+    
     return res.json(toApiResponse(list));
   } catch (error) {
+    console.error('Error fetching doctor appointments:', error);
     return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 }

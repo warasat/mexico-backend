@@ -60,6 +60,11 @@ const DoctorProfileSchema = new Schema(
     availability: { type: String, enum: ['available', 'unavailable'], default: 'unavailable' },
     availabilityUpdatedAt: { type: Date },
 
+    // Admin blocking functionality
+    isBlocked: { type: Boolean, default: false },
+    blockedAt: { type: Date },
+    blockedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+
     // Weekly availability schedule for booking
     weeklyAvailability: {
       monday: { type: DaySlotsSchema, default: () => ({ morning: [], afternoon: [], evening: [] }) },
