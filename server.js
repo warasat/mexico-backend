@@ -23,6 +23,7 @@ app.get("/", (req, res) => {
 
 app.use("/api/users", require("./routes/userRoutes"));
 app.use("/api/landing", require("./routes/landingRoutes"));
+app.use("/api", require("./routes/adminAuthRoutes"));
 app.use("/api/patients", require("./routes/patientRoutes"));
 // Mount appointments BEFORE the broad '/api' doctorProfileRoutes to avoid swallowing
 app.use("/api", require("./routes/appointmentRoutes"));
