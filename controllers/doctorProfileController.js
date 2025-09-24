@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 const streamifier = require('streamifier');
 const DoctorProfile = require('../models/DoctorProfile');
-const LandingDoctor = require('../models/Doctor');
 const cloudinary = require('../utils/cloudinary');
 
 function publicDoctorProjection() {
@@ -45,42 +44,7 @@ function toCard(doc) {
   };
 }
 
-async function syncLandingDoctorFromProfile(profileDoc) {
-  try {
-    const name = profileDoc.displayName || [profileDoc.firstName, profileDoc.lastName].filter(Boolean).join(' ').trim() || 'Doctor';
-    const imageUrl = profileDoc.profileImage?.url || '';
-    const location = [profileDoc.address?.city, profileDoc.address?.country].filter(Boolean).join(', ');
-    const specialty = profileDoc.designation || 'General';
-    const available = profileDoc.availability === 'available';
-    const experienceYears = (() => {
-      const m = /([0-9]+)\+?\s*years?/i.exec(profileDoc.experience || '');
-      return m ? parseInt(m[1], 10) : 0;
-    })();
-
-    await LandingDoctor.findOneAndUpdate(
-      { user: profileDoc.user },
-      {
-        $set: {
-          user: profileDoc.user,
-          name,
-          specialty,
-          rating: 0,
-          location,
-          imageUrl: imageUrl || 'https://res.cloudinary.com/demo/image/upload/v1699999999/placeholder.png',
-          available,
-          duration: 30,
-          featured: false,
-          description: profileDoc.aboutMe || '',
-          experience: experienceYears,
-          consultationFee: 0,
-        },
-      },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
-    );
-  } catch (e) {
-    // Do not fail the main request if syncing fails
-  }
-}
+// Removed legacy sync to Doctor model
 
 // GET /api/doctors
 exports.listDoctors = async (req, res) => {
@@ -124,22 +88,8 @@ exports.getDoctorById = async (req, res) => {
       return res.status(403).json({ message: 'This doctor is currently unavailable for appointments' });
     }
 
-    // Try to enrich with reviews from Landing Doctor if available
-    let reviews = [];
-    try {
-      const LandingDoctorModel = require('../models/Doctor');
-      const Testimonial = require('../models/Testimonial');
-      const landing = await LandingDoctorModel.findOne({ user: profile.user }).lean();
-      if (landing?._id) {
-        reviews = await Testimonial.find({ doctorId: landing._id, isActive: true })
-          .sort({ createdAt: -1 })
-          .limit(50)
-          .select({ patientName: 1, comment: 1, rating: 1, location: 1, imageUrl: 1, createdAt: 1 })
-          .lean();
-      }
-    } catch (_) {
-      // Silently ignore review enrichment errors
-    }
+    // Review enrichment skipped (legacy Doctor model removed)
+    const reviews = [];
 
     return res.json({ success: true, doctor: profile, reviews });
   } catch (err) {
@@ -176,8 +126,6 @@ exports.updateMe = async (req, res) => {
       { $set: { ...payload, user: userId } },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     ).lean();
-    // Sync landing doctor card
-    await syncLandingDoctorFromProfile(doc);
     return res.json({ success: true, doctor: doc });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to update profile' });
@@ -201,7 +149,6 @@ exports.uploadImage = async (req, res) => {
           { $set: { profileImage, user: userId } },
           { new: true, upsert: true, setDefaultsOnInsert: true }
         ).lean();
-        await syncLandingDoctorFromProfile(doc);
         return res.json({ success: true, doctor: doc });
       }
     );
@@ -229,7 +176,6 @@ exports.updateAvailability = async (req, res) => {
     const io = req.app.get('io');
     if (io) io.emit('doctorAvailabilityUpdate', { doctorId: String(doc._id), availability: doc.availability });
 
-    await syncLandingDoctorFromProfile(doc);
     return res.json({ success: true, doctor: doc });
   } catch (err) {
     return res.status(500).json({ message: 'Failed to update availability' });

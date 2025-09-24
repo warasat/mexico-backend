@@ -1,4 +1,4 @@
-const Doctor = require('../models/Doctor');
+const DoctorProfile = require('../models/DoctorProfile');
 const Specialty = require('../models/Specialty');
 const Testimonial = require('../models/Testimonial');
 const LandingPage = require('../models/LandingPage');
@@ -31,6 +31,29 @@ const getHeroData = async (req, res) => {
   }
 };
 
+function mapProfileToLandingCard(p) {
+  const name = p.displayName || [p.firstName, p.lastName].filter(Boolean).join(' ').trim();
+  const location = [p.address?.city, p.address?.state || p.address?.country].filter(Boolean).join(', ');
+  const imageUrl = p.profileImage?.url || '';
+  // Default values for legacy landing fields
+  const rating = 0;
+  const duration = 30;
+  const consultationFee = 0;
+  // Parse numeric years from experience string if needed
+  const expYears = typeof p.experience === 'number' ? p.experience : (Number((p.experience || '').match(/\d+/)?.[0]) || 0);
+  return {
+    name,
+    specialty: p.designation || 'General',
+    rating,
+    location,
+    imageUrl,
+    available: p.availability === 'available',
+    duration,
+    experience: expYears,
+    consultationFee,
+  };
+}
+
 // @desc    Get featured doctors
 // @route   GET /api/landing/doctors
 // @access  Public
@@ -38,13 +61,15 @@ const getFeaturedDoctors = async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 8;
     
-    const doctors = await Doctor.find({ 
-      featured: true, 
-      available: true 
+    const profiles = await DoctorProfile.find({ 
+      availability: 'available' 
     })
-    .select('name specialty rating location imageUrl available duration experience consultationFee')
+    .select('displayName firstName lastName designation profileImage address availability experience createdAt')
     .limit(limit)
-    .sort({ rating: -1, createdAt: -1 });
+    .sort({ createdAt: -1 })
+    .lean();
+
+    const doctors = profiles.map(mapProfileToLandingCard);
 
     res.json({
       success: true,
@@ -128,7 +153,7 @@ const getStats = async (req, res) => {
 
     // Get real counts from database
     const [doctorCount, specialtyCount] = await Promise.all([
-      Doctor.countDocuments({ available: true }),
+      DoctorProfile.countDocuments({ availability: 'available' }),
       Specialty.countDocuments({ isActive: true })
     ]);
 
@@ -243,7 +268,7 @@ const getAllLandingData = async (req, res) => {
   try {
     const [landingPage, doctors, specialties, testimonials] = await Promise.all([
       LandingPage.findOne({ isActive: true }),
-      Doctor.find({ featured: true, available: true }).limit(8).sort({ rating: -1 }),
+      DoctorProfile.find({ availability: 'available' }).limit(8).sort({ createdAt: -1 }).lean(),
       Specialty.find({ isActive: true }).sort({ doctorCount: -1 }),
       Testimonial.find({ isActive: true }).limit(4).sort({ rating: -1 })
     ]);
@@ -257,7 +282,7 @@ const getAllLandingData = async (req, res) => {
 
     // Get real counts
     const [doctorCount, specialtyCount] = await Promise.all([
-      Doctor.countDocuments({ available: true }),
+      DoctorProfile.countDocuments({ availability: 'available' }),
       Specialty.countDocuments({ isActive: true })
     ]);
 
@@ -271,7 +296,7 @@ const getAllLandingData = async (req, res) => {
       success: true,
       data: {
         hero: landingPage.hero,
-        doctors,
+        doctors: Array.isArray(doctors) ? doctors.map(mapProfileToLandingCard) : [],
         specialties,
         testimonials,
         stats,
