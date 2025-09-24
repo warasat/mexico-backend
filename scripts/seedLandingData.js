@@ -13,7 +13,8 @@ const LandingPage = require('../models/LandingPage');
 // Connect to MongoDB
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI || "mongodb+srv://hafiz:hello123@cluster0.y0q6feb.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0");
+    require('dotenv').config();
+    const conn = await mongoose.connect(process.env.MONGODB_URI);
     console.log("MongoDB Connected: Database is connected successfully");
   } catch (error) {
     console.error(`Error: ${error.message}`);

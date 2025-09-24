@@ -1,8 +1,9 @@
 // Node >=18 required (global fetch)
 // Usage: node scripts/test_appointment_flow.js [BASE_URL]
-// BASE_URL default: http://localhost:5000/api
+// BASE_URL from environment variable
 
-const BASE_URL = process.argv[2] || process.env.API_BASE_URL || 'http://localhost:5000/api';
+require('dotenv').config();
+const BASE_URL = process.argv[2] || process.env.API_BASE_URL;
 
 async function json(res) {
   const text = await res.text();
@@ -16,7 +17,7 @@ function randomSuffix() {
 async function registerPatient() {
   const body = {
     fullName: `Test Patient ${randomSuffix()}`,
-    email: `patient_${randomSuffix()}@example.com`,
+    email: `patient_${randomSuffix()}${process.env.TEST_PATIENT_EMAIL_DOMAIN}`,
     phone: `03${Math.floor(100000000 + Math.random() * 899999999)}`,
     password: 'secret123',
     confirmPassword: 'secret123',
@@ -59,7 +60,7 @@ async function createAppointment(token, doctorProfileId, patientId) {
     insurance: '',
     service: 'General Consultation',
     mode: 'clinic',
-    patientEmail: `appt_${randomSuffix()}@example.com`,
+    patientEmail: `appt_${randomSuffix()}${process.env.TEST_PATIENT_EMAIL_DOMAIN}`,
     patientPhone: '03001234567',
     symptoms: 'Headache and fatigue',
     notes: 'Booked via automated test',
