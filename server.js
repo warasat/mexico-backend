@@ -10,8 +10,12 @@ connectDB();
 
 const app = express();
 
-// ✅ CORS middleware (allow all origins)
-app.use(cors({ origin: "*", credentials: true }));
+// ✅ CORS middleware
+const allowedOrigins = [
+  process.env.CORS_ORIGIN || 'http://localhost:5173',
+  process.env.CORS_ORIGIN_ALT || 'http://localhost:5174'
+];
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 
 // Body parser middleware
 app.use(express.json());
@@ -43,10 +47,10 @@ app.use((err, req, res, next) => {
 
 const server = http.createServer(app);
 
-// ✅ Socket.IO with allow all CORS
+// ✅ Socket.IO with CORS from environment
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   },
 });
