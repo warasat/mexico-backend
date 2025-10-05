@@ -1,8 +1,11 @@
+const { sendEmail } = require('../utils/nodeMailer');
+
 const { randomUUID } = require('crypto');
 const Appointment = require('../models/Appointment');
 const DoctorProfile = require('../models/DoctorProfile');
 const Patient = require('../models/Patient');
 const mongoose = require('mongoose');
+
 
 function generateId() {
   try {
@@ -50,6 +53,115 @@ function shapeAppointmentForFrontend(doc) {
   };
   return shaped;
 }
+
+
+// templates/appointmentEmailTemplate.js
+
+function appointmentEmailTemplate({
+  doctorName,
+  patientName,
+  service,
+  date,
+  timeSlot,
+  mode,
+  location,
+  insurance,
+  symptoms,
+  notes,
+}) {
+  const formattedDate = new Date(date).toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  return `
+  <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="background: #0d6efd; color: white; padding: 16px; border-radius: 8px 8px 0 0;">
+      <h2 style="margin: 0;">New Appointment Request</h2>
+    </div>
+
+    <div style="padding: 20px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 8px 8px;">
+      <p>Hello <b>${doctorName}</b>,</p>
+      <p>You have a new appointment request from <b>${patientName}</b>.</p>
+
+      <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+        <tr><td><b>Service:</b></td><td>${service}</td></tr>
+        <tr><td><b>Date:</b></td><td>${formattedDate}</td></tr>
+        <tr><td><b>Time Slot:</b></td><td>${timeSlot}</td></tr>
+        <tr><td><b>Mode:</b></td><td>${mode === 'video' ? 'Video Consultation' : 'Clinic Visit'}</td></tr>
+        ${location ? `<tr><td><b>Location:</b></td><td>${location}</td></tr>` : ''}
+        ${insurance ? `<tr><td><b>Insurance:</b></td><td>${insurance}</td></tr>` : ''}
+        ${symptoms ? `<tr><td><b>Symptoms:</b></td><td>${symptoms}</td></tr>` : ''}
+        ${notes ? `<tr><td><b>Notes:</b></td><td>${notes}</td></tr>` : ''}
+      </table>
+
+      <p style="margin-top: 24px;">Please log in to your dashboard to accept or decline this appointment.</p>
+
+      <p style="color: #888; font-size: 13px;">This is an automated message. Please do not reply.</p>
+    </div>
+  </div>
+  `;
+}
+
+function patientAppointmentRequestTemplate({
+  doctorName,
+  patientName,
+  service,
+  date,
+  timeSlot,
+  mode,
+  location,
+  insurance,
+}) {
+  const formattedDate = new Date(date).toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  return `
+  <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="background: #0d6efd; color: white; padding: 16px; border-radius: 8px 8px 0 0;">
+      <h2 style="margin: 0;">Appointment Request Sent ✅</h2>
+    </div>
+
+    <div style="padding: 20px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 8px 8px;">
+      <p>Hello <b>${patientName}</b>,</p>
+      <p>Your appointment request has been successfully <b>sent</b> to Dr. <b>${doctorName}</b>.</p>
+
+      <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+        <tr><td><b>Doctor:</b></td><td>Dr. ${doctorName}</td></tr>
+        <tr><td><b>Service:</b></td><td>${service}</td></tr>
+        <tr><td><b>Date:</b></td><td>${formattedDate}</td></tr>
+        <tr><td><b>Time Slot:</b></td><td>${timeSlot}</td></tr>
+        <tr><td><b>Mode:</b></td><td>${mode === 'video' ? 'Video Consultation' : 'Clinic Visit'}</td></tr>
+        ${location ? `<tr><td><b>Location:</b></td><td>${location}</td></tr>` : ''}
+        ${insurance ? `<tr><td><b>Insurance:</b></td><td>${insurance}</td></tr>` : ''}
+      </table>
+
+      <p style="margin-top: 24px;">
+        You will receive another email once Dr. <b>${doctorName}</b> reviews and accepts your request.
+      </p>
+
+      <p style="color: #888; font-size: 13px;">
+        This is an automated message. Please do not reply.
+      </p>
+    </div>
+  </div>
+  `;
+}
+
+
+
+
+
+
+
+
+
 
 async function createAppointment(req, res) {
   try {
@@ -136,6 +248,47 @@ async function createAppointment(req, res) {
       ...docSnapshot,
       ...patSnapshot,
     });
+
+    const html = appointmentEmailTemplate({
+      doctorName: docSnapshot.doctorName,
+      patientName: patSnapshot.patientName,
+      service,
+      date: parsedDate,
+      timeSlot,
+      mode,
+      location,
+      insurance,
+      symptoms,
+      notes,
+    });
+
+    const patientConfirmationHtml = patientAppointmentRequestTemplate({
+      doctorName: docSnapshot.doctorName,
+      patientName: patSnapshot.patientName,
+      service,
+      date: parsedDate,
+      timeSlot,
+      mode,
+      location,
+      insurance,
+      symptoms,
+      notes,
+    });
+    // console.log("Sending email to:", doctorProfile.email || doctorProfile.doctorEmail); // ensure correct field
+    // console.log("Email content:", html);
+
+    await sendEmail(
+      doctorProfile.email || doctorProfile.doctorEmail, // ensure correct field
+      `New Appointment Request from ${patSnapshot.patientName}`,
+      html
+    );
+console.log("patientEmail:", patientEmail ,patient.email);
+    // send email to patient as confirmation
+    await sendEmail(
+      patientEmail || patient.email,
+      'Appointment Request Received',
+      patientConfirmationHtml
+    );
 
     const shaped = shapeAppointmentForFrontend(created.toObject());
 
