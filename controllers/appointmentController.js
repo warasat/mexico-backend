@@ -1,11 +1,16 @@
 const { sendEmail } = require('../utils/nodeMailer');
-
 const { randomUUID } = require('crypto');
+const crypto = require('crypto'); // ✅ added for Google Meet link
 const Appointment = require('../models/Appointment');
 const DoctorProfile = require('../models/DoctorProfile');
 const Patient = require('../models/Patient');
 const mongoose = require('mongoose');
 
+// Generate a unique Google Meet link for video appointments
+function generateMeetLink() {
+  const uniqueId = crypto.randomBytes(6).toString('hex');
+  return `https://meet.google.com/${uniqueId}`;
+}
 
 function generateId() {
   try {
@@ -50,13 +55,12 @@ function shapeAppointmentForFrontend(doc) {
       email: doc.patientEmail || '',
       phone: doc.patientPhone || '',
     },
+    meetLink: doc.meetLink || '', // ✅ include meetLink for frontend
   };
   return shaped;
 }
 
-
 // templates/appointmentEmailTemplate.js
-
 function appointmentEmailTemplate({
   doctorName,
   patientName,
@@ -68,6 +72,7 @@ function appointmentEmailTemplate({
   insurance,
   symptoms,
   notes,
+  meetLink, // ✅ receive meetLink
 }) {
   const formattedDate = new Date(date).toLocaleDateString("en-US", {
     weekday: "long",
@@ -91,6 +96,7 @@ function appointmentEmailTemplate({
         <tr><td><b>Date:</b></td><td>${formattedDate}</td></tr>
         <tr><td><b>Time Slot:</b></td><td>${timeSlot}</td></tr>
         <tr><td><b>Mode:</b></td><td>${mode === 'video' ? 'Video Consultation' : 'Clinic Visit'}</td></tr>
+        ${mode === 'video' ? `<tr><td><b>Video Meeting Link:</b></td><td><a href="${meetLink}" style="color:#0d6efd;">Join Google Meet</a></td></tr>` : ''}
         ${location ? `<tr><td><b>Location:</b></td><td>${location}</td></tr>` : ''}
         ${insurance ? `<tr><td><b>Insurance:</b></td><td>${insurance}</td></tr>` : ''}
         ${symptoms ? `<tr><td><b>Symptoms:</b></td><td>${symptoms}</td></tr>` : ''}
@@ -114,6 +120,7 @@ function patientAppointmentRequestTemplate({
   mode,
   location,
   insurance,
+  meetLink, // ✅ receive meetLink
 }) {
   const formattedDate = new Date(date).toLocaleDateString("en-US", {
     weekday: "long",
@@ -138,6 +145,7 @@ function patientAppointmentRequestTemplate({
         <tr><td><b>Date:</b></td><td>${formattedDate}</td></tr>
         <tr><td><b>Time Slot:</b></td><td>${timeSlot}</td></tr>
         <tr><td><b>Mode:</b></td><td>${mode === 'video' ? 'Video Consultation' : 'Clinic Visit'}</td></tr>
+        ${mode === 'video' ? `<tr><td><b>Video Meeting Link:</b></td><td><a href="${meetLink}" style="color:#0d6efd;">Join Google Meet</a></td></tr>` : ''}
         ${location ? `<tr><td><b>Location:</b></td><td>${location}</td></tr>` : ''}
         ${insurance ? `<tr><td><b>Insurance:</b></td><td>${insurance}</td></tr>` : ''}
       </table>
@@ -153,15 +161,6 @@ function patientAppointmentRequestTemplate({
   </div>
   `;
 }
-
-
-
-
-
-
-
-
-
 
 async function createAppointment(req, res) {
   try {
@@ -190,13 +189,11 @@ async function createAppointment(req, res) {
     if (!mongoose.isValidObjectId(doctorId)) {
       return res.status(400).json({ success: false, message: 'Invalid doctor id' });
     }
-    // doctorId from FE is DoctorProfile._id; resolve profile
     doctorProfile = await DoctorProfile.findOne({ $or: [{ _id: doctorId }, { user: doctorId }] }).lean();
     if (!doctorProfile) {
       return res.status(400).json({ success: false, message: 'Doctor not found' });
     }
 
-    // Check if doctor is blocked
     if (doctorProfile.isBlocked) {
       return res.status(403).json({ success: false, message: 'This doctor is currently unavailable for appointments' });
     }
@@ -224,8 +221,10 @@ async function createAppointment(req, res) {
       patientProfileImage: '',
     };
 
-    // Store DoctorProfile _id as canonical doctor identifier for appointments
     const resolvedDoctorId = doctorProfile._id;
+
+    // ✅ generate unique Google Meet link for video mode
+    const meetLink = mode === 'video' ? generateMeetLink() : '';
 
     const created = await Appointment.create({
       bookingId: generateId(),
@@ -238,6 +237,7 @@ async function createAppointment(req, res) {
       insurance: insurance || '',
       service,
       mode,
+      meetLink, // ✅ store in DB
       status: 'pending',
       cancelled: false,
       isCompleted: false,
@@ -260,6 +260,7 @@ async function createAppointment(req, res) {
       insurance,
       symptoms,
       notes,
+      meetLink, // ✅ include in email
     });
 
     const patientConfirmationHtml = patientAppointmentRequestTemplate({
@@ -271,19 +272,15 @@ async function createAppointment(req, res) {
       mode,
       location,
       insurance,
-      symptoms,
-      notes,
+      meetLink, // ✅ include in patient email
     });
-    // console.log("Sending email to:", doctorProfile.email || doctorProfile.doctorEmail); // ensure correct field
-    // console.log("Email content:", html);
 
     await sendEmail(
-      doctorProfile.email || doctorProfile.doctorEmail, // ensure correct field
+      doctorProfile.email || doctorProfile.doctorEmail,
       `New Appointment Request from ${patSnapshot.patientName}`,
       html
     );
-// console.log("patientEmail:", patientEmail ,patient.email);
-    // send email to patient as confirmation
+
     await sendEmail(
       patientEmail || patient.email,
       'Appointment Request Received',
@@ -296,11 +293,9 @@ async function createAppointment(req, res) {
     if (io) {
       io.to(`patient_${patientId}`).emit('appointmentCreated', { patientId: String(patientId), appointment: shaped });
       io.to(`doctor_${resolvedDoctorId}`).emit('appointmentCreated', { doctorId: String(resolvedDoctorId), appointment: shaped });
-      // Also notify doctor by their auth user id room if client joins that
       if (doctorProfile?.user) {
         io.to(`doctorUser_${String(doctorProfile.user)}`).emit('appointmentCreated', { doctorUserId: String(doctorProfile.user), appointment: shaped });
       }
-      // Broadcast to admin dashboards
       io.to('admin').emit('appointmentCreated', { appointment: shaped });
     }
 
@@ -399,6 +394,48 @@ async function getAppointmentById(req, res) {
     return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 }
+// ---------------- Email Templates for Completed & Cancelled ----------------
+
+function appointmentCompletedTemplate(doctorName, patientName, appointment) {
+  return `
+  <div style="font-family: Arial, sans-serif; color: #333;">
+    <div style="background: #28a745; color: white; padding: 16px; border-radius: 8px 8px 0 0;">
+      <h2 style="margin: 0;">Appointment Completed ✅</h2>
+    </div>
+    <div style="padding: 20px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 8px 8px;">
+      <p>Hello <b>${patientName}</b>,</p>
+      <p>Your appointment with <b>Dr. ${doctorName}</b> has been marked as <b>completed</b>.</p>
+      <table style="width: 100%; margin: 16px 0; border-collapse: collapse;">
+        <tr><td><b>Service:</b></td><td>${appointment.service}</td></tr>
+        <tr><td><b>Date:</b></td><td>${new Date(appointment.date).toLocaleDateString()}</td></tr>
+        <tr><td><b>Time Slot:</b></td><td>${appointment.timeSlot}</td></tr>
+        <tr><td><b>Mode:</b></td><td>${appointment.mode}</td></tr>
+      </table>
+      <p>We hope you had a good experience.</p>
+    </div>
+  </div>`;
+}
+
+function appointmentCancelledTemplate(doctorName, patientName, appointment) {
+  return `
+  <div style="font-family: Arial, sans-serif; color: #333;">
+    <div style="background: #dc3545; color: white; padding: 16px; border-radius: 8px 8px 0 0;">
+      <h2 style="margin: 0;">Appointment Cancelled ❌</h2>
+    </div>
+    <div style="padding: 20px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 8px 8px;">
+      <p>Hello <b>${patientName}</b>,</p>
+      <p>We regret to inform you that your appointment with <b>Dr. ${doctorName}</b> has been <b>cancelled</b>.</p>
+      <table style="width: 100%; margin: 16px 0; border-collapse: collapse;">
+        <tr><td><b>Service:</b></td><td>${appointment.service}</td></tr>
+        <tr><td><b>Date:</b></td><td>${new Date(appointment.date).toLocaleDateString()}</td></tr>
+        <tr><td><b>Time Slot:</b></td><td>${appointment.timeSlot}</td></tr>
+        <tr><td><b>Mode:</b></td><td>${appointment.mode}</td></tr>
+      </table>
+      <p>Please contact the clinic if you wish to reschedule.</p>
+    </div>
+  </div>`;
+}
+
 
 async function updateAppointmentStatus(req, res) {
   try {
@@ -416,6 +453,17 @@ async function updateAppointmentStatus(req, res) {
     appt.isCompleted = status === 'completed';
     appt.cancelled = status === 'cancelled';
     await appt.save();
+    // --- Added: send patient email on status change ---
+const doctorName = appt.doctorName || appt.doctorDisplayName || 'Doctor';
+const patientName = appt.patientName || 'Patient';
+if (status === 'completed' && appt.patientEmail) {
+  const html = appointmentCompletedTemplate(doctorName, patientName, appt);
+  await sendEmail(appt.patientEmail, 'Your Appointment Has Been Completed', html);
+} else if (status === 'cancelled' && appt.patientEmail) {
+  const html = appointmentCancelledTemplate(doctorName, patientName, appt);
+  await sendEmail(appt.patientEmail, 'Your Appointment Has Been Cancelled', html);
+}
+
     const shaped = shapeAppointmentForFrontend(appt.toObject());
     const io = req.app.get('io');
     if (io) io.emit('appointmentUpdated', { appointmentId: shaped._id, appointment: shaped });
@@ -435,6 +483,14 @@ async function cancelAppointment(req, res) {
     appt.status = 'cancelled';
     appt.cancelled = true;
     await appt.save();
+    // --- Added: send patient email when appointment is cancelled ---
+const doctorName = appt.doctorName || appt.doctorDisplayName || 'Doctor';
+const patientName = appt.patientName || 'Patient';
+if (appt.patientEmail) {
+  const html = appointmentCancelledTemplate(doctorName, patientName, appt);
+  await sendEmail(appt.patientEmail, 'Your Appointment Has Been Cancelled', html);
+}
+
     const shaped = shapeAppointmentForFrontend(appt.toObject());
     const io = req.app.get('io');
     if (io) io.emit('appointmentCancelled', { appointmentId: shaped._id, appointment: shaped });
