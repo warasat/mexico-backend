@@ -75,6 +75,15 @@ const DoctorProfileSchema = new Schema(
       saturday: { type: DaySlotsSchema, default: () => ({ morning: [], afternoon: [], evening: [] }) },
       sunday: { type: DaySlotsSchema, default: () => ({ morning: [], afternoon: [], evening: [] }) },
     },
+
+    // Google Calendar integration tokens
+    googleTokens: {
+      access_token: { type: String },
+      refresh_token: { type: String },
+      scope: { type: String },
+      token_type: { type: String },
+      expiry_date: { type: Number },
+    },
   },
   { timestamps: true }
 );

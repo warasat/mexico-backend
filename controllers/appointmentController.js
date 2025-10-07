@@ -5,6 +5,7 @@ const Appointment = require('../models/Appointment');
 const DoctorProfile = require('../models/DoctorProfile');
 const Patient = require('../models/Patient');
 const mongoose = require('mongoose');
+const simpleGoogleMeetService = require('../services/simpleGoogleMeetService');
 
 // Generate a unique Google Meet link for video appointments
 function generateMeetLink() {
@@ -223,8 +224,43 @@ async function createAppointment(req, res) {
 
     const resolvedDoctorId = doctorProfile._id;
 
-    // ✅ generate unique Google Meet link for video mode
-    const meetLink = mode === 'video' ? generateMeetLink() : '';
+    // ✅ Generate REAL Google Meet link using Google Calendar API
+    let meetLink = '';
+    let googleEventId = '';
+    
+    if (mode === 'video') {
+      try {
+        console.log('createAppointment: creating Google Meet link for doctor:', doctorProfile._id);
+        
+        // Use simple Google Meet service
+        const simpleRes = await simpleGoogleMeetService.createSimpleGoogleMeetEvent({
+          doctorName: docSnapshot.doctorName,
+          patientName: patSnapshot.patientName,
+          service,
+          date: parsedDate,
+          timeSlot,
+          doctorEmail: doctorProfile.email || doctorProfile.doctorEmail,
+          patientEmail: patientEmail || patient.email,
+          duration: 60
+        });
+        
+        if (simpleRes && simpleRes.success && simpleRes.meetLink) {
+          meetLink = simpleRes.meetLink;
+          googleEventId = simpleRes.eventId;
+          console.log('createAppointment: received meetLink from Simple Google Meet Service:', meetLink);
+          console.log('createAppointment: received googleEventId:', googleEventId);
+        } else {
+          console.warn('createAppointment: simple approach failed, falling back to generated link');
+          meetLink = generateMeetLink();
+        }
+      } catch (err) {
+        console.error('createAppointment: error creating Google Meet link:', err && (err.stack || err.message));
+        // fallback: create a generated link so booking continues
+        meetLink = generateMeetLink();
+      }
+    } else {
+      meetLink = '';
+    }
 
     const created = await Appointment.create({
       bookingId: generateId(),
@@ -237,7 +273,8 @@ async function createAppointment(req, res) {
       insurance: insurance || '',
       service,
       mode,
-      meetLink, // ✅ store in DB
+      meetLink, // ✅ store REAL Google Meet link in DB
+      googleEventId, // Store Google Calendar event ID
       status: 'pending',
       cancelled: false,
       isCompleted: false,
@@ -248,6 +285,8 @@ async function createAppointment(req, res) {
       ...docSnapshot,
       ...patSnapshot,
     });
+
+    console.log('Appointment created:', created._id, 'meetLink:', meetLink);
 
     const html = appointmentEmailTemplate({
       doctorName: docSnapshot.doctorName,
@@ -286,6 +325,8 @@ async function createAppointment(req, res) {
       'Appointment Request Received',
       patientConfirmationHtml
     );
+
+    console.log('Emails sent to doctor:', doctorProfile.email || doctorProfile.doctorEmail, 'and patient:', patientEmail || patient.email);
 
     const shaped = shapeAppointmentForFrontend(created.toObject());
 
