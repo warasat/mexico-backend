@@ -1,12 +1,13 @@
 const { sendEmail } = require('../utils/nodeMailer');
 const { randomUUID } = require('crypto');
-const crypto = require('crypto'); // ✅ added for Google Meet link
+const crypto = require('crypto');
 const Appointment = require('../models/Appointment');
 const DoctorProfile = require('../models/DoctorProfile');
 const Patient = require('../models/Patient');
 const mongoose = require('mongoose');
+const GoogleMeetService = require('../services/simpleGoogleMeetService'); // ✅ Real Meet API service import
 
-// Generate a unique Google Meet link for video appointments
+// ✅ Generate fallback Google Meet link (in case API fails)
 function generateMeetLink() {
   const uniqueId = crypto.randomBytes(6).toString('hex');
   return `https://meet.google.com/${uniqueId}`;
@@ -55,12 +56,13 @@ function shapeAppointmentForFrontend(doc) {
       email: doc.patientEmail || '',
       phone: doc.patientPhone || '',
     },
-    meetLink: doc.meetLink || '', // ✅ include meetLink for frontend
+    meetLink: doc.meetLink || '',
   };
   return shaped;
 }
 
-// templates/appointmentEmailTemplate.js
+// ---------------- Email Templates ----------------
+
 function appointmentEmailTemplate({
   doctorName,
   patientName,
@@ -72,7 +74,7 @@ function appointmentEmailTemplate({
   insurance,
   symptoms,
   notes,
-  meetLink, // ✅ receive meetLink
+  meetLink,
 }) {
   const formattedDate = new Date(date).toLocaleDateString("en-US", {
     weekday: "long",
@@ -82,34 +84,42 @@ function appointmentEmailTemplate({
   });
 
   return `
-  <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-    <div style="background: #0d6efd; color: white; padding: 16px; border-radius: 8px 8px 0 0;">
-      <h2 style="margin: 0;">New Appointment Request</h2>
+  <div style="font-family: Arial, sans-serif;">
+    <div style="background: #0d6efd; color: white; padding: 16px;">
+      <h2>New Appointment Request</h2>
     </div>
-
-    <div style="padding: 20px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 8px 8px;">
+    <div style="padding: 20px;">
       <p>Hello <b>${doctorName}</b>,</p>
       <p>You have a new appointment request from <b>${patientName}</b>.</p>
 
-      <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+      <table style="width:100%; margin-bottom: 16px;">
         <tr><td><b>Service:</b></td><td>${service}</td></tr>
         <tr><td><b>Date:</b></td><td>${formattedDate}</td></tr>
         <tr><td><b>Time Slot:</b></td><td>${timeSlot}</td></tr>
         <tr><td><b>Mode:</b></td><td>${mode === 'video' ? 'Video Consultation' : 'Clinic Visit'}</td></tr>
-        ${mode === 'video' ? `<tr><td><b>Video Meeting Link:</b></td><td><a href="${meetLink}" style="color:#0d6efd;">Join Google Meet</a></td></tr>` : ''}
         ${location ? `<tr><td><b>Location:</b></td><td>${location}</td></tr>` : ''}
         ${insurance ? `<tr><td><b>Insurance:</b></td><td>${insurance}</td></tr>` : ''}
         ${symptoms ? `<tr><td><b>Symptoms:</b></td><td>${symptoms}</td></tr>` : ''}
         ${notes ? `<tr><td><b>Notes:</b></td><td>${notes}</td></tr>` : ''}
       </table>
 
-      <p style="margin-top: 24px;">Please log in to your dashboard to accept or decline this appointment.</p>
+      ${
+        mode === 'video'
+          ? `<div style="margin-top: 16px; padding: 12px; background: #f5f5f5; border-radius: 6px;">
+              <b>🎥 Google Meet Link:</b><br>
+              <a href="${meetLink}" style="color:#0d6efd; font-size: 16px;" target="_blank">
+                Join Google Meet
+              </a><br>
+              <small style="color: #555;">(Click the link above to join the video call)</small>
+            </div>`
+          : ''
+      }
 
-      <p style="color: #888; font-size: 13px;">This is an automated message. Please do not reply.</p>
+      <p style="margin-top: 24px;">Please log in to your dashboard to accept or decline this appointment.</p>
     </div>
-  </div>
-  `;
+  </div>`;
 }
+
 
 function patientAppointmentRequestTemplate({
   doctorName,
@@ -120,7 +130,7 @@ function patientAppointmentRequestTemplate({
   mode,
   location,
   insurance,
-  meetLink, // ✅ receive meetLink
+  meetLink,
 }) {
   const formattedDate = new Date(date).toLocaleDateString("en-US", {
     weekday: "long",
@@ -130,106 +140,111 @@ function patientAppointmentRequestTemplate({
   });
 
   return `
-  <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-    <div style="background: #0d6efd; color: white; padding: 16px; border-radius: 8px 8px 0 0;">
-      <h2 style="margin: 0;">Appointment Request Sent ✅</h2>
+  <div style="font-family: Arial, sans-serif;">
+    <div style="background: #0d6efd; color: white; padding: 16px;">
+      <h2>Appointment Request Sent ✅</h2>
     </div>
-
-    <div style="padding: 20px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 8px 8px;">
+    <div style="padding: 20px;">
       <p>Hello <b>${patientName}</b>,</p>
-      <p>Your appointment request has been successfully <b>sent</b> to Dr. <b>${doctorName}</b>.</p>
+      <p>Your appointment request has been sent to Dr. <b>${doctorName}</b>.</p>
 
-      <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
-        <tr><td><b>Doctor:</b></td><td>Dr. ${doctorName}</td></tr>
+      <table style="width:100%; margin-bottom: 16px;">
         <tr><td><b>Service:</b></td><td>${service}</td></tr>
         <tr><td><b>Date:</b></td><td>${formattedDate}</td></tr>
         <tr><td><b>Time Slot:</b></td><td>${timeSlot}</td></tr>
         <tr><td><b>Mode:</b></td><td>${mode === 'video' ? 'Video Consultation' : 'Clinic Visit'}</td></tr>
-        ${mode === 'video' ? `<tr><td><b>Video Meeting Link:</b></td><td><a href="${meetLink}" style="color:#0d6efd;">Join Google Meet</a></td></tr>` : ''}
         ${location ? `<tr><td><b>Location:</b></td><td>${location}</td></tr>` : ''}
         ${insurance ? `<tr><td><b>Insurance:</b></td><td>${insurance}</td></tr>` : ''}
       </table>
 
+      ${
+        mode === 'video'
+          ? `<div style="margin-top: 16px; padding: 12px; background: #f5f5f5; border-radius: 6px;">
+              <b>🎥 Google Meet Link:</b><br>
+              <a href="${meetLink}" style="color:#0d6efd; font-size: 16px;" target="_blank">
+                Join Google Meet
+              </a><br>
+              <small style="color: #555;">(Click the link above to join the video call)</small>
+            </div>`
+          : ''
+      }
+
       <p style="margin-top: 24px;">
         You will receive another email once Dr. <b>${doctorName}</b> reviews and accepts your request.
       </p>
-
-      <p style="color: #888; font-size: 13px;">
-        This is an automated message. Please do not reply.
-      </p>
     </div>
-  </div>
-  `;
+  </div>`;
 }
 
+
+// ✅ CREATE APPOINTMENT CONTROLLER
 async function createAppointment(req, res) {
   try {
     const { doctorId, patientId, date, timeSlot, location, insurance, service, mode, patientEmail, patientPhone, symptoms, notes } = req.body || {};
     if (!doctorId || !patientId || !date || !timeSlot || !service || !mode) {
-      return res.status(400).json({ success: false, message: 'Missing required fields: doctorId, patientId, date, timeSlot, service, mode are required' });
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
-    if (typeof timeSlot !== 'string' || !timeSlot.trim()) {
-      return res.status(400).json({ success: false, message: 'Invalid timeSlot' });
-    }
-    if (typeof service !== 'string' || !service.trim()) {
-      return res.status(400).json({ success: false, message: 'Invalid service' });
-    }
-    if (!['video', 'clinic'].includes(String(mode))) {
-      return res.status(400).json({ success: false, message: 'Invalid mode. Allowed: video, clinic' });
-    }
-
-    // Validate date
     const parsedDate = new Date(date);
     if (isNaN(parsedDate.getTime())) {
       return res.status(400).json({ success: false, message: 'Invalid date' });
     }
 
-    let doctorProfile = null;
-    if (!mongoose.isValidObjectId(doctorId)) {
-      return res.status(400).json({ success: false, message: 'Invalid doctor id' });
-    }
-    doctorProfile = await DoctorProfile.findOne({ $or: [{ _id: doctorId }, { user: doctorId }] }).lean();
-    if (!doctorProfile) {
-      return res.status(400).json({ success: false, message: 'Doctor not found' });
-    }
+    const doctorProfile = await DoctorProfile.findOne({ $or: [{ _id: doctorId }, { user: doctorId }] }).lean();
+    if (!doctorProfile) return res.status(404).json({ success: false, message: 'Doctor not found' });
 
-    if (doctorProfile.isBlocked) {
-      return res.status(403).json({ success: false, message: 'This doctor is currently unavailable for appointments' });
-    }
-
-    if (!mongoose.isValidObjectId(patientId)) {
-      return res.status(400).json({ success: false, message: 'Invalid patient id' });
-    }
     const patient = await Patient.findById(patientId).lean();
-    if (!patient) {
-      return res.status(400).json({ success: false, message: 'Patient not found' });
-    }
+    if (!patient) return res.status(404).json({ success: false, message: 'Patient not found' });
 
     const docSnapshot = {
-      doctorName: doctorProfile?.firstName && doctorProfile?.lastName
+      doctorName: doctorProfile.firstName
         ? `${doctorProfile.firstName} ${doctorProfile.lastName}`
-        : (doctorProfile?.displayName || ''),
-      doctorDisplayName: doctorProfile?.displayName || '',
-      doctorDesignation: doctorProfile?.designation || '',
-      doctorImageUrl: doctorProfile?.profileImage?.url || '',
-      doctorLocation: doctorProfile?.address?.city || '',
+        : doctorProfile.displayName,
+      doctorDisplayName: doctorProfile.displayName || '',
+      doctorDesignation: doctorProfile.designation || '',
+      doctorImageUrl: doctorProfile.profileImage?.url || '',
+      doctorLocation: doctorProfile.address?.city || '',
     };
 
     const patSnapshot = {
-      patientName: patient?.fullName || '',
-      patientProfileImage: '',
+      patientName: patient.fullName || '',
     };
 
-    const resolvedDoctorId = doctorProfile._id;
+    let meetLink = '';
+    let googleEventId = '';
 
-    // ✅ generate unique Google Meet link for video mode
-    const meetLink = mode === 'video' ? generateMeetLink() : '';
+    // ✅ REAL GOOGLE MEET LINK CREATION
+    if (mode === 'video') {
+      try {
+        const simpleRes = await GoogleMeetService.createEvent({
+          doctorName: docSnapshot.doctorName,
+          patientName: patSnapshot.patientName,
+          service,
+          date: parsedDate,
+          timeSlot,
+          doctorEmail: doctorProfile.email || doctorProfile.doctorEmail,
+          patientEmail: patientEmail || patient.email,
+          duration: 60,
+        });
+
+        if (simpleRes && simpleRes.success && simpleRes.meetLink) {
+          meetLink = simpleRes.meetLink;
+          googleEventId = simpleRes.eventId;
+          // console.log('✅ Google Meet Created:', meetLink);
+        } else {
+          console.warn('⚠️ Google Meet failed, fallback link generated');
+          meetLink = generateMeetLink();
+        }
+      } catch (err) {
+        console.error('❌ Google Meet API Error:', err.message);
+        meetLink = generateMeetLink();
+      }
+    }
 
     const created = await Appointment.create({
       bookingId: generateId(),
       appointmentId: buildAppointmentId(Date.now()),
-      doctorId: resolvedDoctorId,
+      doctorId,
       patientId,
       date: parsedDate,
       timeSlot,
@@ -237,7 +252,8 @@ async function createAppointment(req, res) {
       insurance: insurance || '',
       service,
       mode,
-      meetLink, // ✅ store in DB
+      meetLink,
+      googleEventId,
       status: 'pending',
       cancelled: false,
       isCompleted: false,
@@ -249,70 +265,54 @@ async function createAppointment(req, res) {
       ...patSnapshot,
     });
 
-    const html = appointmentEmailTemplate({
-      doctorName: docSnapshot.doctorName,
-      patientName: patSnapshot.patientName,
-      service,
-      date: parsedDate,
-      timeSlot,
-      mode,
-      location,
-      insurance,
-      symptoms,
-      notes,
-      meetLink, // ✅ include in email
-    });
-
-    const patientConfirmationHtml = patientAppointmentRequestTemplate({
-      doctorName: docSnapshot.doctorName,
-      patientName: patSnapshot.patientName,
-      service,
-      date: parsedDate,
-      timeSlot,
-      mode,
-      location,
-      insurance,
-      meetLink, // ✅ include in patient email
-    });
-
+    // ✅ Send email notifications
     await sendEmail(
       doctorProfile.email || doctorProfile.doctorEmail,
       `New Appointment Request from ${patSnapshot.patientName}`,
-      html
+      appointmentEmailTemplate({
+        doctorName: docSnapshot.doctorName,
+        patientName: patSnapshot.patientName,
+        service,
+        date: parsedDate,
+        timeSlot,
+        mode,
+        location,
+        insurance,
+        symptoms,
+        notes,
+        meetLink,
+      })
     );
 
     await sendEmail(
       patientEmail || patient.email,
       'Appointment Request Received',
-      patientConfirmationHtml
+      patientAppointmentRequestTemplate({
+        doctorName: docSnapshot.doctorName,
+        patientName: patSnapshot.patientName,
+        service,
+        date: parsedDate,
+        timeSlot,
+        mode,
+        location,
+        insurance,
+        meetLink,
+      })
     );
 
+    // ✅ Socket.io notifications
     const shaped = shapeAppointmentForFrontend(created.toObject());
-
     const io = req.app.get('io');
     if (io) {
-      io.to(`patient_${patientId}`).emit('appointmentCreated', { patientId: String(patientId), appointment: shaped });
-      io.to(`doctor_${resolvedDoctorId}`).emit('appointmentCreated', { doctorId: String(resolvedDoctorId), appointment: shaped });
-      if (doctorProfile?.user) {
-        io.to(`doctorUser_${String(doctorProfile.user)}`).emit('appointmentCreated', { doctorUserId: String(doctorProfile.user), appointment: shaped });
-      }
+      io.to(`patient_${patientId}`).emit('appointmentCreated', { patientId, appointment: shaped });
+      io.to(`doctor_${doctorId}`).emit('appointmentCreated', { doctorId, appointment: shaped });
       io.to('admin').emit('appointmentCreated', { appointment: shaped });
     }
 
     return res.status(201).json({ success: true, message: 'Appointment created', data: shaped });
   } catch (error) {
-    console.error('createAppointment error:', error && (error.stack || error));
-    if (error && error.name === 'ValidationError') {
-      const errors = Object.values(error.errors || {}).map(e => e.message);
-      return res.status(400).json({ success: false, message: 'Validation error', errors });
-    }
-    if (error && error.name === 'CastError') {
-      return res.status(400).json({ success: false, message: `Invalid value for field: ${error.path}` });
-    }
-    if (error && (error.code === 11000 || error.code === 11001)) {
-      return res.status(409).json({ success: false, message: 'Duplicate key error', key: error.keyValue });
-    }
-    return res.status(500).json({ success: false, message: error?.message || 'Internal server error' });
+    console.error('createAppointment error:', error.message);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 }
 

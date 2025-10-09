@@ -91,11 +91,11 @@ exports.getDoctorsList = async (req, res) => {
       // Provide fallback image for missing profile pictures
       const getDoctorImage = () => {
         if (d.profileImage && d.profileImage.url && d.profileImage.url.trim()) {
-          console.log(`[Page ${page}] Doctor profile image found for ${d.firstName || 'Unknown'}:`, d.profileImage.url);
+          // console.log(`[Page ${page}] Doctor profile image found for ${d.firstName || 'Unknown'}:`, d.profileImage.url);
           return d.profileImage.url;
         }
         // Fallback to default doctor image
-        console.log(`[Page ${page}] Using fallback doctor image for doctor:`, d.firstName || 'Unknown', 'Doctor profile exists:', !!d);
+        // console.log(`[Page ${page}] Using fallback doctor image for doctor:`, d.firstName || 'Unknown', 'Doctor profile exists:', !!d);
         return '/src/assets/admin/assets/img/profiles/doctor-03.jpg';
       };
       
@@ -104,21 +104,21 @@ exports.getDoctorsList = async (req, res) => {
       const doctorId = doctorAuth?.doctorId || '';
 
       // Debug the raw data
-      console.log(`[Page ${page}] Raw doctor data:`, {
-        _id: d._id,
-        user: d.user,
-        userType: typeof d.user,
-        firstName: d.firstName,
-        lastName: d.lastName,
-        displayName: d.displayName,
-        isBlocked: d.isBlocked,
-        doctorId: doctorId,
-        doctorAuth: doctorAuth
-      });
+      // console.log(`[Page ${page}] Raw doctor data:`, {
+      //   _id: d._id,
+      //   user: d.user,
+      //   userType: typeof d.user,
+      //   firstName: d.firstName,
+      //   lastName: d.lastName,
+      //   displayName: d.displayName,
+      //   isBlocked: d.isBlocked,
+      //   doctorId: doctorId,
+      //   doctorAuth: doctorAuth
+      // });
 
       // Ensure we have a valid user ID
       const userId = d.user ? String(d.user) : String(d._id);
-      console.log(`[Page ${page}] Using userId:`, userId, 'for doctor:', d.firstName || 'Unknown');
+      // console.log(`[Page ${page}] Using userId:`, userId, 'for doctor:', d.firstName || 'Unknown');
       
       return {
         id: userId, // Use user ID, fallback to profile ID if user is missing
@@ -166,7 +166,7 @@ exports.getPatientsList = async (req, res) => {
     const total = distinctUsers.length;
 
     // First, let's try a direct query to see what data we have
-    console.log(`[Page ${page}] Fetching patient profiles directly from database...`);
+    // console.log(`[Page ${page}] Fetching patient profiles directly from database...`);
     
     // Build a pipeline that deduplicates by user (latest profile wins), then paginates
     const profiles = await PatientProfile.aggregate([
@@ -245,39 +245,39 @@ exports.getPatientsList = async (req, res) => {
     
     // Also try a direct query to see all patient profiles
     const allProfiles = await PatientProfile.find({}).limit(20);
-    console.log(`[Page ${page}] Direct query - All patient profiles:`, allProfiles.map(p => ({
-      firstName: p.firstName,
-      lastName: p.lastName,
-      dateOfBirth: p.dateOfBirth,
-      addressLine: p.addressLine,
-      user: p.user
-    })));
+    // console.log(`[Page ${page}] Direct query - All patient profiles:`, allProfiles.map(p => ({
+    //   firstName: p.firstName,
+    //   lastName: p.lastName,
+    //   dateOfBirth: p.dateOfBirth,
+    //   addressLine: p.addressLine,
+    //   user: p.user
+    // })));
     
     // Also try a direct query to see all patients with their patientIds
     const Patient = require('../models/Patient');
     const allPatients = await Patient.find({}).limit(20);
-    console.log(`[Page ${page}] Direct query - All patients with patientIds:`, allPatients.map(p => ({
-      _id: p._id,
-      patientId: p.patientId,
-      fullName: p.fullName,
-      email: p.email
-    })));
+    // console.log(`[Page ${page}] Direct query - All patients with patientIds:`, allPatients.map(p => ({
+    //   _id: p._id,
+    //   patientId: p.patientId,
+    //   fullName: p.fullName,
+    //   email: p.email
+    // })));
 
     // Debug: Log all profiles data to see what we're getting from database
-    console.log(`[Page ${page}] Total profiles fetched from database:`, profiles.length);
-    profiles.forEach((pf, index) => {
-      console.log(`[Page ${page}] Profile ${index + 1}:`, {
-        firstName: pf.firstName,
-        lastName: pf.lastName,
-        dateOfBirth: pf.dateOfBirth,
-        addressLine: pf.addressLine,
-        phone: pf.phone,
-        user: pf.user,
-        patientDoc: pf.patientDoc,
-        hasPatientDoc: !!pf.patientDoc,
-        patientDocLength: pf.patientDoc ? pf.patientDoc.length : 0
-      });
-    });
+    // console.log(`[Page ${page}] Total profiles fetched from database:`, profiles.length);
+    // profiles.forEach((pf, index) => {
+    //   console.log(`[Page ${page}] Profile ${index + 1}:`, {
+    //     firstName: pf.firstName,
+    //     lastName: pf.lastName,
+    //     dateOfBirth: pf.dateOfBirth,
+    //     addressLine: pf.addressLine,
+    //     phone: pf.phone,
+    //     user: pf.user,
+    //     patientDoc: pf.patientDoc,
+    //     hasPatientDoc: !!pf.patientDoc,
+    //     patientDocLength: pf.patientDoc ? pf.patientDoc.length : 0
+    //   });
+    // });
 
     const results = await Promise.all(profiles.map(async (pf) => {
       const last = Array.isArray(pf.lastAppt) && pf.lastAppt[0] ? pf.lastAppt[0] : null;
@@ -291,12 +291,12 @@ exports.getPatientsList = async (req, res) => {
       // Get patient ID from Patient collection (PTF9D3B6 format)
       const patientDoc = Array.isArray(pf.patientDoc) && pf.patientDoc[0] ? pf.patientDoc[0] : null;
       const patientIdFromPatient = patientDoc?.patientId || '';
-      console.log(`[Page ${page}] Patient ID from Patient collection for ${patientName}:`, {
-        patientId: patientIdFromPatient,
-        patientDoc: patientDoc,
-        hasPatientDoc: !!patientDoc,
-        user: pf.user
-      });
+      // console.log(`[Page ${page}] Patient ID from Patient collection for ${patientName}:`, {
+      //   patientId: patientIdFromPatient,
+      //   patientDoc: patientDoc,
+      //   hasPatientDoc: !!patientDoc,
+      //   user: pf.user
+      // });
       
       // If patientId is empty, try to fetch it directly from Patient collection
       let finalPatientId = patientIdFromPatient;
@@ -304,20 +304,20 @@ exports.getPatientsList = async (req, res) => {
         try {
           const directPatient = await Patient.findById(pf.user).lean();
           finalPatientId = directPatient?.patientId || '';
-          console.log(`[Page ${page}] Direct Patient query for ${patientName}:`, {
-            patientId: finalPatientId,
-            patient: directPatient
-          });
+          // console.log(`[Page ${page}] Direct Patient query for ${patientName}:`, {
+          //   patientId: finalPatientId,
+          //   patient: directPatient
+          // });
         } catch (error) {
-          console.log(`[Page ${page}] Error fetching patient directly for ${patientName}:`, error);
+          // console.log(`[Page ${page}] Error fetching patient directly for ${patientName}:`, error);
         }
       }
       
       // Calculate age from dateOfBirth
       const calculateAge = (dateOfBirth) => {
-        console.log(`[Page ${page}] Processing dateOfBirth for ${patientName}:`, dateOfBirth, 'Type:', typeof dateOfBirth);
+        // console.log(`[Page ${page}] Processing dateOfBirth for ${patientName}:`, dateOfBirth, 'Type:', typeof dateOfBirth);
         if (!dateOfBirth || dateOfBirth.trim() === '') {
-          console.log(`[Page ${page}] No dateOfBirth found for ${patientName}`);
+          // console.log(`[Page ${page}] No dateOfBirth found for ${patientName}`);
           return '';
         }
         try {
@@ -329,26 +329,26 @@ exports.getPatientsList = async (req, res) => {
             age--;
           }
           const calculatedAge = age >= 0 ? age.toString() : '';
-          console.log(`[Page ${page}] Calculated age for ${patientName}: ${calculatedAge} from dateOfBirth: ${dateOfBirth}`);
+          // console.log(`[Page ${page}] Calculated age for ${patientName}: ${calculatedAge} from dateOfBirth: ${dateOfBirth}`);
           return calculatedAge;
         } catch (error) {
-          console.log('Error calculating age for dateOfBirth:', dateOfBirth, error);
+          // console.log('Error calculating age for dateOfBirth:', dateOfBirth, error);
           return '';
         }
       };
       
       // Get address from addressLine
       const address = pf.addressLine || '';
-      console.log(`[Page ${page}] Address for ${patientName}:`, address, 'Type:', typeof address);
+      // console.log(`[Page ${page}] Address for ${patientName}:`, address, 'Type:', typeof address);
       
       // Provide fallback image for missing profile pictures
       const getPatientImage = () => {
         if (pf.profileImage && pf.profileImage.url && pf.profileImage.url.trim()) {
-          console.log(`[Page ${page}] Patient profile image found for ${patientName}:`, pf.profileImage.url);
+          // console.log(`[Page ${page}] Patient profile image found for ${patientName}:`, pf.profileImage.url);
           return pf.profileImage.url;
         }
         // Fallback to default patient image
-        console.log(`[Page ${page}] Using fallback patient image for patient:`, patientName, 'Patient profile exists:', !!pf);
+        // console.log(`[Page ${page}] Using fallback patient image for patient:`, patientName, 'Patient profile exists:', !!pf);
         return '/src/assets/admin/assets/img/profiles/avatar-01.jpg';
       };
       
@@ -386,15 +386,15 @@ exports.getPatientsList = async (req, res) => {
         }
       };
       
-      console.log(`[Page ${page}] Final result for ${patientName}:`, {
-        PatientID: result.PatientID,
-        Age: result.Age,
-        Address: result.Address,
-        dateOfBirth: pf.dateOfBirth,
-        addressLine: pf.addressLine,
-        patientIdFromPatient: patientIdFromPatient,
-        finalPatientId: finalPatientId
-      });
+      // console.log(`[Page ${page}] Final result for ${patientName}:`, {
+      //   PatientID: result.PatientID,
+      //   Age: result.Age,
+      //   Address: result.Address,
+      //   dateOfBirth: pf.dateOfBirth,
+      //   addressLine: pf.addressLine,
+      //   patientIdFromPatient: patientIdFromPatient,
+      //   finalPatientId: finalPatientId
+      // });
       
       return result;
     }));
@@ -464,11 +464,11 @@ exports.getAppointmentsList = async (req, res) => {
       
       // Fetch specialty from appointment schema's doctorDesignation field first, then fallback to doctor profile
       const speciality = a.doctorDesignation || doctor.designation || 'General Practice';
-      console.log(`[Page ${page}] Doctor specialty for ${doctorName}:`, {
-        appointmentDesignation: a.doctorDesignation,
-        doctorProfileDesignation: doctor.designation,
-        finalSpecialty: speciality
-      });
+      // console.log(`[Page ${page}] Doctor specialty for ${doctorName}:`, {
+      //   appointmentDesignation: a.doctorDesignation,
+      //   doctorProfileDesignation: doctor.designation,
+      //   finalSpecialty: speciality
+      // });
       
       const patientName = a.patientName || (`${patient.firstName || ''} ${patient.lastName || ''}`.trim());
       
@@ -476,22 +476,22 @@ exports.getAppointmentsList = async (req, res) => {
       const getDoctorImage = () => {
         // Check if doctor profile exists and has profileImage with url
         if (doctor && doctor.profileImage && doctor.profileImage.url && doctor.profileImage.url.trim()) {
-          console.log(`[Page ${page}] Doctor profile image found for ${doctor.firstName || 'Unknown'}:`, doctor.profileImage.url);
+          // console.log(`[Page ${page}] Doctor profile image found for ${doctor.firstName || 'Unknown'}:`, doctor.profileImage.url);
           return doctor.profileImage.url;
         }
         // Fallback to default doctor image
-        console.log(`[Page ${page}] Using fallback doctor image for doctor:`, doctor.firstName || 'Unknown', 'Doctor profile exists:', !!doctor);
+        // console.log(`[Page ${page}] Using fallback doctor image for doctor:`, doctor.firstName || 'Unknown', 'Doctor profile exists:', !!doctor);
         return '/src/assets/admin/assets/img/profiles/doctor-03.jpg';
       };
       
       const getPatientImage = () => {
         // Check if patient profile exists and has profileImage with url
         if (patient && patient.profileImage && patient.profileImage.url && patient.profileImage.url.trim()) {
-          console.log(`[Page ${page}] Patient profile image found for ${patient.firstName || 'Unknown'}:`, patient.profileImage.url);
+          // console.log(`[Page ${page}] Patient profile image found for ${patient.firstName || 'Unknown'}:`, patient.profileImage.url);
           return patient.profileImage.url;
         }
         // Fallback to default patient image
-        console.log(`[Page ${page}] Using fallback patient image for patient:`, patient.firstName || 'Unknown', 'Patient profile exists:', !!patient);
+        // console.log(`[Page ${page}] Using fallback patient image for patient:`, patient.firstName || 'Unknown', 'Patient profile exists:', !!patient);
         return '/src/assets/admin/assets/img/profiles/avatar-01.jpg';
       };
       

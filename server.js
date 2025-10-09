@@ -33,6 +33,7 @@ app.use("/api/patients", require("./routes/patientRoutes"));
 app.use("/api", require("./routes/appointmentRoutes"));
 app.use("/api/doctors", require("./routes/doctorRoutes"));
 app.use("/api", require("./routes/doctorProfileRoutes"));
+app.use("/api/reviews", require("./routes/reviewRoutes"));
 app.use("/api", require("./routes/adminRoutes"));
 
 // Centralized error handler
