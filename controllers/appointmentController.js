@@ -5,12 +5,11 @@ const Appointment = require('../models/Appointment');
 const DoctorProfile = require('../models/DoctorProfile');
 const Patient = require('../models/Patient');
 const mongoose = require('mongoose');
-const GoogleMeetService = require('../services/simpleGoogleMeetService'); // ✅ Real Meet API service import
 
-// ✅ Generate fallback Google Meet link (in case API fails)
-function generateMeetLink() {
-  const uniqueId = crypto.randomBytes(6).toString('hex');
-  return `https://meet.google.com/${uniqueId}`;
+// ✅ Generate Jitsi Meet Link (SAME for doctor and patient)
+function generateJitsiLink(doctorName, patientName) {
+  const roomName = `Clinic-${doctorName?.replace(/\s+/g, '') || 'Doctor'}-${patientName?.replace(/\s+/g, '') || 'Patient'}-${crypto.randomBytes(3).toString('hex')}`;
+  return `https://meet.jit.si/${roomName}`;
 }
 
 function generateId() {
@@ -106,11 +105,11 @@ function appointmentEmailTemplate({
       ${
         mode === 'video'
           ? `<div style="margin-top: 16px; padding: 12px; background: #f5f5f5; border-radius: 6px;">
-              <b>🎥 Google Meet Link:</b><br>
+              <b>🎥 Jitsi Meet Link:</b><br>
               <a href="${meetLink}" style="color:#0d6efd; font-size: 16px;" target="_blank">
-                Join Google Meet
+                Join Video Call
               </a><br>
-              <small style="color: #555;">(Click the link above to join the video call)</small>
+              <small style="color: #555;">(Click to join the same Jitsi meeting room)</small>
             </div>`
           : ''
       }
@@ -119,7 +118,6 @@ function appointmentEmailTemplate({
     </div>
   </div>`;
 }
-
 
 function patientAppointmentRequestTemplate({
   doctorName,
@@ -160,11 +158,11 @@ function patientAppointmentRequestTemplate({
       ${
         mode === 'video'
           ? `<div style="margin-top: 16px; padding: 12px; background: #f5f5f5; border-radius: 6px;">
-              <b>🎥 Google Meet Link:</b><br>
+              <b>🎥 Jitsi Meet Link:</b><br>
               <a href="${meetLink}" style="color:#0d6efd; font-size: 16px;" target="_blank">
-                Join Google Meet
+                Join Video Call
               </a><br>
-              <small style="color: #555;">(Click the link above to join the video call)</small>
+              <small style="color: #555;">(Click to join the same Jitsi meeting room)</small>
             </div>`
           : ''
       }
@@ -175,7 +173,6 @@ function patientAppointmentRequestTemplate({
     </div>
   </div>`;
 }
-
 
 // ✅ CREATE APPOINTMENT CONTROLLER
 async function createAppointment(req, res) {
@@ -210,35 +207,10 @@ async function createAppointment(req, res) {
       patientName: patient.fullName || '',
     };
 
+    // ✅ Generate one shared Jitsi link
     let meetLink = '';
-    let googleEventId = '';
-
-    // ✅ REAL GOOGLE MEET LINK CREATION
     if (mode === 'video') {
-      try {
-        const simpleRes = await GoogleMeetService.createEvent({
-          doctorName: docSnapshot.doctorName,
-          patientName: patSnapshot.patientName,
-          service,
-          date: parsedDate,
-          timeSlot,
-          doctorEmail: doctorProfile.email || doctorProfile.doctorEmail,
-          patientEmail: patientEmail || patient.email,
-          duration: 60,
-        });
-
-        if (simpleRes && simpleRes.success && simpleRes.meetLink) {
-          meetLink = simpleRes.meetLink;
-          googleEventId = simpleRes.eventId;
-          // console.log('✅ Google Meet Created:', meetLink);
-        } else {
-          console.warn('⚠️ Google Meet failed, fallback link generated');
-          meetLink = generateMeetLink();
-        }
-      } catch (err) {
-        console.error('❌ Google Meet API Error:', err.message);
-        meetLink = generateMeetLink();
-      }
+      meetLink = generateJitsiLink(docSnapshot.doctorName, patSnapshot.patientName);
     }
 
     const created = await Appointment.create({
@@ -253,7 +225,6 @@ async function createAppointment(req, res) {
       service,
       mode,
       meetLink,
-      googleEventId,
       status: 'pending',
       cancelled: false,
       isCompleted: false,
@@ -300,7 +271,6 @@ async function createAppointment(req, res) {
       })
     );
 
-    // ✅ Socket.io notifications
     const shaped = shapeAppointmentForFrontend(created.toObject());
     const io = req.app.get('io');
     if (io) {
@@ -312,6 +282,82 @@ async function createAppointment(req, res) {
     return res.status(201).json({ success: true, message: 'Appointment created', data: shaped });
   } catch (error) {
     console.error('createAppointment error:', error.message);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+}
+
+// ✅ Rest of your functions (unchanged)
+async function getMyAppointments(req, res) {
+  try {
+    const userId = req.user && req.user.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    const items = await Appointment.find({ patientId: userId }).sort({ createdAt: -1 }).lean();
+    const list = items.map(shapeAppointmentForFrontend);
+    return res.json(toApiResponse(list));
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+}
+
+async function getDoctorAppointments(req, res) {
+  try {
+    const userId = req.user && req.user.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const profile = await DoctorProfile.findOne({ user: userId }).select({ _id: 1, user: 1 }).lean();
+    const doctorIds = [];
+    if (profile?._id) doctorIds.push(profile._id);
+    if (mongoose.isValidObjectId(userId)) doctorIds.push(new mongoose.Types.ObjectId(userId));
+    const filter = doctorIds.length ? { doctorId: { $in: doctorIds } } : { doctorId: userId };
+
+    const PatientProfile = require('../models/PatientProfile');
+    const items = await Appointment.aggregate([
+      { $match: filter },
+      {
+        $lookup: {
+          from: 'patientprofiles',
+          localField: 'patientId',
+          foreignField: 'user',
+          as: 'patientProfile',
+          pipeline: [{ $project: { profileImage: 1, firstName: 1, lastName: 1 } }],
+        },
+      },
+      { $sort: { createdAt: -1 } },
+    ]);
+
+    const list = items.map((item) => {
+      const patientProfile = item.patientProfile && item.patientProfile[0] ? item.patientProfile[0] : null;
+      const patientImage = patientProfile?.profileImage?.url || '';
+
+      return {
+        ...shapeAppointmentForFrontend(item),
+        patient: {
+          ...shapeAppointmentForFrontend(item).patient,
+          profileImage: patientImage,
+        },
+      };
+    });
+
+    return res.json(toApiResponse(list));
+  } catch (error) {
+    console.error('Error fetching doctor appointments:', error);
+    return res.status(500).json({ success: false, message: 'Internal server error' });
+  }
+}
+
+async function getAppointmentById(req, res) {
+  try {
+    const id = req.params.appointmentId || req.params.id;
+    const appt = await Appointment.findById(id).lean();
+    if (!appt) {
+      return res.status(404).json({ success: false, message: 'Appointment not found' });
+    }
+    return res.json({ success: true, message: 'OK', data: appt });
+  } catch (error) {
     return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 }
