@@ -35,6 +35,7 @@ app.use("/api/doctors", require("./routes/doctorRoutes"));
 app.use("/api", require("./routes/doctorProfileRoutes"));
 app.use("/api/reviews", require("./routes/reviewRoutes"));
 app.use("/api", require("./routes/adminRoutes"));
+app.use("/api/auth", require("./routes/passwordResetRoutes"));
 
 // Centralized error handler
 app.use((err, req, res, next) => {

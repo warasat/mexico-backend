@@ -32,6 +32,10 @@ const patientSchema = new mongoose.Schema({
     type: String, 
     required: [true, "Password is required"],
     minlength: [6, "Password must be at least 6 characters long"]
+  },
+  passwordVersion: {
+    type: Number,
+    default: 1
   }
 }, {
   timestamps: true
@@ -46,6 +50,8 @@ patientSchema.pre("save", async function(next) {
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
+    // Increment password version when password changes
+    this.passwordVersion = (this.passwordVersion || 0) + 1;
     next();
   } catch (error) {
     next(error);

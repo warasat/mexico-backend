@@ -2,8 +2,8 @@ const Patient = require("../models/Patient");
 const jwt = require("jsonwebtoken");
 
 // Generate JWT token
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || "fallback_secret_key", {
+const generateToken = (id, passwordVersion = 1) => {
+  return jwt.sign({ id, passwordVersion }, process.env.JWT_SECRET || "fallback_secret_key", {
     expiresIn: process.env.JWT_EXPIRE || "30d",
   });
 };
@@ -128,7 +128,7 @@ const loginPatient = async (req, res) => {
     }
 
     // Generate token
-    const token = generateToken(patient._id);
+    const token = generateToken(patient._id, patient.passwordVersion);
 
     res.json({
       success: true,
